@@ -51,6 +51,22 @@ export const fromDisplayWeight = (value: number, unit: WeightUnit) => (unit === 
 export const formatWeight = (kg: number, unit: WeightUnit, decimals = 1) =>
   `${round(toDisplayWeight(kg, unit), decimals).toFixed(decimals)} ${unit}`
 
+/** Formats kg-based training volume in the user's preferred unit. */
+export const formatVolume = (kg: number, unit: WeightUnit) =>
+  `${formatCompact(toDisplayWeight(kg, unit))} ${unit}`
+
+export const isTimedPrescription = (value: string) => /\b(min|mins|minute|minutes|sec|secs|second|seconds)\b/i.test(value)
+
+/** Converts an exercise prescription like "30-60 sec" or "20 min" into seconds. */
+export const parseDurationSec = (value: string) => {
+  const match = value.match(/\d+(?:\.\d+)?/)
+  if (!match) return undefined
+  const amount = Number(match[0])
+  if (/\b(min|mins|minute|minutes)\b/i.test(value)) return Math.round(amount * 60)
+  if (/\b(sec|secs|second|seconds)\b/i.test(value)) return Math.round(amount)
+  return undefined
+}
+
 export const getInitials = (name: string) =>
   name
     .split(' ')

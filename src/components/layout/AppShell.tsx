@@ -18,7 +18,8 @@ export const AppShell = ({
 }) => {
   const profile = useAppStore((state) => state.profile)
   const sessions = useAppStore((state) => state.sessions)
-  const stats = getStats(sessions, profile)
+  const exercises = useAppStore((state) => state.exercises)
+  const stats = getStats(sessions, profile, 3650, exercises)
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {

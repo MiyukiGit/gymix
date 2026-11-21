@@ -6,7 +6,7 @@ import type { AppState, Experience, Goal, UserProfile, WeightUnit } from '../typ
 import { useAppStore } from '../store/useAppStore'
 import { achievementDefs, achievementProgress } from '../lib/achievements'
 import { getStats } from '../lib/stats'
-import { cn, dateKey, formatCompact, formatDate, getInitials } from '../lib/utils'
+import { cn, dateKey, formatDate, formatVolume, fromDisplayWeight, getInitials, round, toDisplayWeight } from '../lib/utils'
 import { Button } from '../components/ui/Button'
 import { Card, SectionHeader } from '../components/ui/Card'
 import { ConfirmDialog, ProgressBar } from '../components/ui/Misc'
@@ -33,6 +33,7 @@ export const ProfileScreen = () => {
   const { toast } = useToast()
   const profile = useAppStore((state) => state.profile)
   const sessions = useAppStore((state) => state.sessions)
+  const exercises = useAppStore((state) => state.exercises)
   const prs = useAppStore((state) => state.prs)
   const achievements = useAppStore((state) => state.achievements)
   const updateProfile = useAppStore((state) => state.updateProfile)
@@ -47,8 +48,8 @@ export const ProfileScreen = () => {
 
   useEffect(() => setDraft(profile), [profile])
 
-  const stats = useMemo(() => getStats(sessions, profile), [sessions, profile])
-  const appState = { profile, sessions, prs, achievements } as AppState
+  const stats = useMemo(() => getStats(sessions, profile, 3650, exercises), [sessions, profile, exercises])
+  const appState = { profile, sessions, exercises, prs, achievements } as unknown as AppState
 
   const activeDates = useMemo(() => new Set(sessions.filter((session) => session.status === 'completed').map((session) => dateKey(session.date))), [sessions])
 
@@ -86,6 +87,7 @@ export const ProfileScreen = () => {
       achievements: state.achievements,
       activeSessionId: state.activeSessionId,
       streakFreezes: state.streakFreezes,
+      restTimer: state.restTimer ?? null,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -126,7 +128,7 @@ export const ProfileScreen = () => {
           <div className="flex flex-wrap gap-5">
             <div><p className="text-display text-2xl font-semibold text-text">{stats.totalWorkouts}</p><p className="text-[11px] text-muted">Workouts</p></div>
             <div><p className="text-display text-2xl font-semibold text-warning">{stats.currentStreak}</p><p className="text-[11px] text-muted">Streak</p></div>
-            <div><p className="text-display text-2xl font-semibold text-accent">{formatCompact(stats.totalVolume)}</p><p className="text-[11px] text-muted">Total kg</p></div>
+            <div><p className="text-display text-2xl font-semibold text-accent">{formatVolume(stats.totalVolume, profile.unit)}</p><p className="text-[11px] text-muted">Total volume</p></div>
           </div>
         </div>
       </Card>
@@ -140,7 +142,18 @@ export const ProfileScreen = () => {
             <div><label className="label">Weight unit</label><div className="flex gap-2">{(['kg', 'lb'] as WeightUnit[]).map((unit) => <button key={unit} onClick={() => setDraft({ ...draft, unit })} className={cn('flex-1 rounded-xl border py-2 text-xs font-semibold transition', draft.unit === unit ? 'border-accent bg-accent/10 text-accent' : 'border-border text-muted hover:text-text')}>{unit.toUpperCase()}</button>)}</div></div>
             <div><label className="label">Age</label><input className="field" type="number" min="10" max="100" value={draft.age} onChange={(event) => setDraft({ ...draft, age: Number(event.target.value) })} /></div>
             <div><label className="label">Height (cm)</label><input className="field" type="number" min="100" max="250" value={draft.heightCm} onChange={(event) => setDraft({ ...draft, heightCm: Number(event.target.value) })} /></div>
-            <div><label className="label">Weight (kg)</label><input className="field" type="number" min="30" max="300" step="0.1" value={draft.weightKg} onChange={(event) => setDraft({ ...draft, weightKg: Number(event.target.value) })} /></div>
+            <div>
+              <label className="label">Bodyweight ({draft.unit})</label>
+              <input
+                className="field"
+                type="number"
+                min={draft.unit === 'kg' ? 30 : 66}
+                max={draft.unit === 'kg' ? 300 : 660}
+                step="0.1"
+                value={round(toDisplayWeight(draft.weightKg, draft.unit), 1)}
+                onChange={(event) => setDraft({ ...draft, weightKg: fromDisplayWeight(Number(event.target.value), draft.unit) })}
+              />
+            </div>
             <div><label className="label">Weekly target</label><input className="field" type="number" min="1" max="7" value={draft.weeklyTarget} onChange={(event) => setDraft({ ...draft, weeklyTarget: Number(event.target.value) })} /></div>
           </div>
           <div className="mt-4"><label className="label">Experience</label><div className="flex flex-wrap gap-2">{experiences.map((item) => <button key={item} onClick={() => setDraft({ ...draft, experience: item })} className={cn('rounded-full border px-3 py-1.5 text-xs font-semibold transition', draft.experience === item ? 'border-accent bg-accent text-[#11140f]' : 'border-border text-muted hover:text-text')}>{item}</button>)}</div></div>

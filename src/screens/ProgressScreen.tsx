@@ -3,7 +3,7 @@ import { Activity, Award, BarChart3, CalendarDays, Clock3, Dumbbell, Flame, Targ
 import { useMemo, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { getExerciseProgression, getMuscleAggregates, getPRList, getStats, getTrend, getVolumesByCategory } from '../lib/stats'
-import { cn, formatCompact, formatDate, formatDuration } from '../lib/utils'
+import { cn, formatCompact, formatDate, formatDuration, formatVolume, formatWeight } from '../lib/utils'
 import { Card, SectionHeader } from '../components/ui/Card'
 import { EmptyState, ProgressBar, SegmentedControl, StatTile } from '../components/ui/Misc'
 import { MuscleDonut, MuscleRadar, ProgressionChart, VolumeAreaChart } from '../components/charts/Charts'
@@ -15,15 +15,16 @@ export const ProgressScreen = () => {
   const sessions = useAppStore((state) => state.sessions)
   const profile = useAppStore((state) => state.profile)
   const exercises = useAppStore((state) => state.exercises)
+  const prRecords = useAppStore((state) => state.prs)
   const [range, setRange] = useState<Range>('90')
   const [metric, setMetric] = useState<'weight' | 'e1rm' | 'volume'>('e1rm')
   const days = rangeDays[range]
 
-  const stats = useMemo(() => getStats(sessions, profile, days), [sessions, profile, days])
-  const trend = useMemo(() => getTrend(sessions, days), [sessions, days])
-  const muscles = useMemo(() => getMuscleAggregates(sessions, days), [sessions, days])
-  const categories = useMemo(() => getVolumesByCategory(sessions, days), [sessions, days])
-  const prs = useMemo(() => getPRList(sessions, profile.unit), [sessions, profile.unit])
+  const stats = useMemo(() => getStats(sessions, profile, days, exercises), [sessions, profile, exercises, days])
+  const trend = useMemo(() => getTrend(sessions, profile, exercises, days), [sessions, profile, exercises, days])
+  const muscles = useMemo(() => getMuscleAggregates(sessions, profile, exercises, days), [sessions, profile, exercises, days])
+  const categories = useMemo(() => getVolumesByCategory(sessions, profile, exercises, days), [sessions, profile, exercises, days])
+  const prs = useMemo(() => getPRList(prRecords, exercises, profile.unit), [prRecords, exercises, profile.unit])
 
   const trackedIds = useMemo(() => {
     const counts = new Map<string, number>()
@@ -32,7 +33,7 @@ export const ProgressScreen = () => {
   }, [sessions])
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null)
   const activeExerciseId = selectedExercise && trackedIds.includes(selectedExercise) ? selectedExercise : trackedIds[0]
-  const progression = useMemo(() => (activeExerciseId ? getExerciseProgression(sessions, activeExerciseId) : []), [sessions, activeExerciseId])
+  const progression = useMemo(() => (activeExerciseId ? getExerciseProgression(sessions, profile, exercises, activeExerciseId) : []), [sessions, profile, exercises, activeExerciseId])
   const activeExercise = exercises.find((exercise) => exercise.id === activeExerciseId)
   const firstPoint = progression[0]
   const lastPoint = progression[progression.length - 1]
@@ -59,7 +60,7 @@ export const ProgressScreen = () => {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <StatTile icon={Dumbbell} label="Workouts" value={String(stats.totalWorkouts)} hint="In selected range" accent />
-        <StatTile icon={TrendingUp} label="Volume" value={formatCompact(stats.totalVolume)} suffix={profile.unit} hint="Total load moved" />
+        <StatTile icon={TrendingUp} label="Volume" value={formatVolume(stats.totalVolume, profile.unit)} hint="Total load moved" />
         <StatTile icon={Activity} label="Total reps" value={formatCompact(stats.totalReps)} hint="All completed sets" />
         <StatTile icon={Clock3} label="Avg duration" value={formatDuration(stats.avgDuration)} hint="Per session" />
         <StatTile icon={CalendarDays} label="Per week" value={String(stats.weeklyFrequency)} suffix="sessions" hint="Last 7 days" />
@@ -68,12 +69,12 @@ export const ProgressScreen = () => {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <SectionHeader title="Training volume" subtitle="Total kg moved over time" action={<span className="chip"><Flame size={12} className="text-warning" /> {stats.totalWorkouts} sessions</span>} />
+          <SectionHeader title="Training volume" subtitle={`Total volume moved over time (${profile.unit})`} action={<span className="chip"><Flame size={12} className="text-warning" /> {stats.totalWorkouts} sessions</span>} />
           {trend.length && trend.some((item) => item.volume > 0) ? <VolumeAreaChart data={trend} unit={profile.unit} /> : <EmptyState compact icon={BarChart3} title="No data in this range" description="Try a longer time range or log a workout." />}
         </Card>
         <Card>
           <SectionHeader title="Muscle distribution" subtitle="Volume by muscle group" />
-          <MuscleDonut data={muscles.map((item) => ({ name: item.name, volume: item.volume }))} />
+          <MuscleDonut data={muscles.map((item) => ({ name: item.name, volume: item.volume }))} unit={profile.unit} />
           <div className="mt-2 space-y-2">
             {topMuscles.slice(0, 4).map((item) => (
               <div key={item.muscle} className="flex items-center justify-between text-[11px]">
@@ -102,8 +103,8 @@ export const ProgressScreen = () => {
               <ProgressionChart data={progression} unit={profile.unit} metric={metric} />
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border/60 pt-4 sm:grid-cols-4">
                 <div><p className="text-[10px] text-muted">Sessions</p><p className="text-sm font-semibold text-text">{progression.length}</p></div>
-                <div><p className="text-[10px] text-muted">Latest top set</p><p className="text-sm font-semibold text-text">{lastPoint ? `${lastPoint.weight} ${profile.unit}` : '—'}</p></div>
-                <div><p className="text-[10px] text-muted">Est. 1RM</p><p className="text-sm font-semibold text-text">{lastPoint ? `${lastPoint.e1rm} ${profile.unit}` : '—'}</p></div>
+                <div><p className="text-[10px] text-muted">Latest top set</p><p className="text-sm font-semibold text-text">{lastPoint ? formatWeight(lastPoint.weight, profile.unit, 1) : '—'}</p></div>
+                <div><p className="text-[10px] text-muted">Est. 1RM</p><p className="text-sm font-semibold text-text">{lastPoint ? formatWeight(lastPoint.e1rm, profile.unit, 1) : '—'}</p></div>
                 <div><p className="text-[10px] text-muted">Change</p><p className={cn('text-sm font-semibold', improvement >= 0 ? 'text-success' : 'text-danger')}>{improvement >= 0 ? '+' : ''}{improvement.toFixed(1)}%</p></div>
               </div>
               {activeExercise && <p className="mt-3 text-[11px] text-muted">{activeExercise.primary.map((id) => muscleMapName(id)).join(' · ')} · {activeExercise.equipment}</p>}
@@ -112,7 +113,7 @@ export const ProgressScreen = () => {
         </Card>
         <Card>
           <SectionHeader title="Muscle balance" subtitle="Where your volume is going" />
-          <MuscleRadar data={muscles.map((item) => ({ name: item.name, volume: item.volume }))} />
+          <MuscleRadar data={muscles.map((item) => ({ name: item.name, volume: item.volume }))} unit={profile.unit} />
           <div className="mt-2 space-y-3 border-t border-border/60 pt-4">
             <div><p className="label">Most trained</p><p className="text-sm font-semibold text-accent">{topMuscles[0]?.name ?? '—'}</p></div>
             <div><p className="label">Needs attention</p><div className="flex flex-wrap gap-1.5">{leastMuscles.map((item) => <span key={item.muscle} className="rounded-md bg-warning/10 px-2 py-1 text-[11px] text-warning">{item.name}</span>)}</div></div>
@@ -127,7 +128,7 @@ export const ProgressScreen = () => {
             <div className="space-y-3">
               {categories.map((item, index) => (
                 <div key={item.name}>
-                  <div className="mb-1.5 flex items-center justify-between text-xs"><span className="text-muted">{item.name}</span><span className="font-semibold text-text">{formatCompact(item.volume)} {profile.unit}</span></div>
+                  <div className="mb-1.5 flex items-center justify-between text-xs"><span className="text-muted">{item.name}</span><span className="font-semibold text-text">{formatVolume(item.volume, profile.unit)}</span></div>
                   <ProgressBar value={(item.volume / categories[0].volume) * 100} color={['#c6f36a', '#8edb78', '#f4b860', '#92978f'][index % 4]} />
                 </div>
               ))}
@@ -141,7 +142,7 @@ export const ProgressScreen = () => {
               {featuredPRs.map((pr) => (
                 <div key={pr.id} className="flex items-center gap-3 rounded-xl border border-border/70 bg-bg/40 p-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/10 text-warning"><Trophy size={15} /></div>
-                  <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-text">{pr.exerciseName}</p><p className="text-[10px] text-muted">{pr.type === 'e1rm' ? 'Estimated 1RM' : 'Heaviest set'} · {formatDate(pr.date, 'MMM d, yyyy')}</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-text">{pr.exerciseName}</p><p className="text-[10px] text-muted">{pr.typeLabel} · {formatDate(pr.date, 'MMM d, yyyy')}</p></div>
                   <p className="text-xs font-bold text-accent">{pr.displayValue}</p>
                 </div>
               ))}

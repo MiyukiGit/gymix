@@ -3,24 +3,15 @@ import { ArrowRight, CalendarDays, Clock3, Dumbbell, Flame, Play, Sparkles, Targ
 import { format } from 'date-fns'
 import type { AppState, TabId } from '../types'
 import { useAppStore } from '../store/useAppStore'
+import { getMuscleRecoveryMap, suggestRoutine } from '../lib/coaching'
 import { getStats, getWeeklyActivity, getPRList } from '../lib/stats'
 import { achievementDefs, achievementProgress } from '../lib/achievements'
-import { cn, formatCompact, formatDuration, formatDate, greeting, relativeDate } from '../lib/utils'
+import { cn, formatDuration, formatDate, formatVolume, greeting, relativeDate } from '../lib/utils'
 import { Button } from '../components/ui/Button'
 import { Card, SectionHeader } from '../components/ui/Card'
 import { ProgressBar, StatTile } from '../components/ui/Misc'
 import { WeeklyBars } from '../components/charts/Charts'
 import { useToast } from '../components/ui/Toast'
-
-const dayRoutine: Record<number, string> = {
-  1: 'push-day',
-  2: 'pull-day',
-  3: 'leg-day',
-  4: 'upper-body',
-  5: 'leg-day',
-  6: 'full-body',
-  0: 'full-body',
-}
 
 const quotes = [
   'The work you do in the dark shows up in the light.',
@@ -33,19 +24,23 @@ export const HomeScreen = ({ onNavigate }: { onNavigate: (tab: TabId) => void })
   const { toast } = useToast()
   const profile = useAppStore((state) => state.profile)
   const sessions = useAppStore((state) => state.sessions)
+  const exercises = useAppStore((state) => state.exercises)
+  const prRecords = useAppStore((state) => state.prs)
   const routines = useAppStore((state) => state.routines)
   const achievements = useAppStore((state) => state.achievements)
   const activeSessionId = useAppStore((state) => state.activeSessionId)
   const startWorkout = useAppStore((state) => state.startWorkout)
   const activeSession = sessions.find((session) => session.id === activeSessionId)
 
-  const stats = getStats(sessions, profile)
-  const weekly = getWeeklyActivity(sessions, 7)
+  const stats = getStats(sessions, profile, 3650, exercises)
+  const weekly = getWeeklyActivity(sessions, profile, exercises, 7)
   const recent = sessions.filter((session) => session.status === 'completed').slice(0, 4)
-  const prs = getPRList(sessions, profile.unit)
-  const scheduled = routines.find((routine) => routine.id === dayRoutine[new Date().getDay()]) ?? routines[0]
+  const prs = getPRList(prRecords, exercises, profile.unit)
+  const recovery = getMuscleRecoveryMap(sessions, profile, exercises)
+  const routineSuggestion = suggestRoutine(routines, recovery, exercises)
+  const scheduled = routineSuggestion?.routine ?? routines[0]
   const quote = quotes[new Date().getDate() % quotes.length]
-  const appState = { profile, sessions, prs, achievements } as unknown as AppState
+  const appState = { profile, sessions, exercises, prs: prRecords, achievements } as unknown as AppState
   const nextAchievement = achievementDefs
     .filter((def) => !achievements.some((unlocked) => unlocked.id === def.id))
     .map((def) => ({ def, ...achievementProgress(def, appState) }))
@@ -109,6 +104,9 @@ export const HomeScreen = ({ onNavigate }: { onNavigate: (tab: TabId) => void })
                 </div>
                 <h2 className="text-display text-2xl font-semibold text-text sm:text-3xl">{scheduled?.name ?? 'Custom Workout'}</h2>
                 <p className="mt-2 max-w-md text-sm text-muted">{scheduled?.description ?? 'Build your own session.'}</p>
+                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-accent/90">
+                  <Sparkles size={12} /> Coach pick · {routineSuggestion?.reason ?? 'Pick a routine and get moving.'}
+                </p>
               </div>
               <div className="hidden h-16 w-16 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent sm:flex">
                 <Dumbbell size={28} />
@@ -146,7 +144,7 @@ export const HomeScreen = ({ onNavigate }: { onNavigate: (tab: TabId) => void })
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         <StatTile icon={Flame} label="Active days" value={String(stats.activeDays)} hint="All-time consistency" accent />
         <StatTile icon={Dumbbell} label="Workouts" value={String(stats.totalWorkouts)} hint="Sessions completed" />
-        <StatTile icon={TrendingUp} label="Total volume" value={formatCompact(stats.totalVolume)} suffix={profile.unit} hint="All lifts combined" />
+        <StatTile icon={TrendingUp} label="Total volume" value={formatVolume(stats.totalVolume, profile.unit)} hint="All lifts combined" />
         <StatTile icon={Clock3} label="Training time" value={formatDuration(stats.totalTime)} hint="Hours in the gym" />
         <StatTile icon={CalendarDays} label="This week" value={String(stats.weeklyFrequency)} suffix="sessions" hint="Last 7 days" accent />
       </section>
@@ -161,7 +159,7 @@ export const HomeScreen = ({ onNavigate }: { onNavigate: (tab: TabId) => void })
           <WeeklyBars data={weekly} />
           <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3 text-[11px] text-muted">
             <span>{weekly.filter((day) => day.active).length} active days</span>
-            <span>{formatCompact(weekly.reduce((sum, day) => sum + day.volume, 0))} {profile.unit} moved</span>
+            <span>{formatVolume(weekly.reduce((sum, day) => sum + day.volume, 0), profile.unit)} moved</span>
           </div>
         </Card>
 
@@ -187,7 +185,7 @@ export const HomeScreen = ({ onNavigate }: { onNavigate: (tab: TabId) => void })
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-semibold text-text">{formatDuration(session.durationSec)}</p>
-                  <p className="text-[10px] text-muted">{formatCompact(session.volume)} {profile.unit}</p>
+                  <p className="text-[10px] text-muted">{formatVolume(session.volume, profile.unit)}</p>
                 </div>
               </motion.button>
             ))}

@@ -88,7 +88,11 @@ export interface SetEntry {
   weight: number
   reps: number
   completed: boolean
-  previous?: { weight: number; reps: number }
+  /** Present on timed sets (cardio, planks, holds). Stored in seconds. */
+  durationSec?: number
+  /** Optional 1-10 rating of how hard the completed set felt. */
+  rpe?: number
+  previous?: { weight: number; reps: number; durationSec?: number; rpe?: number }
 }
 
 export interface WorkoutExercise {
@@ -111,6 +115,8 @@ export interface WorkoutSession {
   notes?: string
   volume: number
   totalReps: number
+  /** Sum of completed timed sets, in seconds. Kept separate from reps. */
+  activeSec?: number
   prIds: string[]
 }
 
@@ -134,7 +140,7 @@ export interface Routine {
 export interface PersonalRecord {
   id: string
   exerciseId: string
-  type: 'weight' | 'reps' | 'e1rm' | 'volume'
+  type: 'weight' | 'reps' | 'e1rm' | 'volume' | 'time'
   value: number
   reps?: number
   date: string
@@ -170,6 +176,12 @@ export interface UserProfile {
   joinDate: string
 }
 
+export interface RestTimerState {
+  /** Wall-clock epoch milliseconds. The countdown is derived from this, never decremented. */
+  endsAt: number
+  durationSec: number
+}
+
 export interface AppState {
   profile: UserProfile
   exercises: Exercise[]
@@ -180,4 +192,5 @@ export interface AppState {
   achievements: UnlockedAchievement[]
   activeSessionId: string | null
   streakFreezes: number
+  restTimer?: RestTimerState | null
 }

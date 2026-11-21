@@ -1,8 +1,9 @@
 import { format, subDays } from 'date-fns'
 import type { AppState, Equipment, Exercise, Routine, SetEntry, UserProfile, WorkoutExercise, WorkoutSession } from '../types'
 import { checkNewAchievements } from '../lib/achievements'
-import { derivePRs, setVolume } from '../lib/stats'
-import { uid } from '../lib/utils'
+import { isTimedExercise, recomputeSession } from '../lib/metrics'
+import { rebuildPRs } from '../lib/stats'
+import { parseDurationSec, uid } from '../lib/utils'
 import { exercises, exerciseById } from './exercises'
 import { builtInRoutines } from './routines'
 
@@ -92,14 +93,24 @@ const buildSession = (date: Date, routine: Routine, sessionIndex: number): Worko
     const base = baseWeight(exercise)
     const weight = base === 0 ? 0 : roundTo(Math.max(2.5, base * progression * (1 + variation)), 2.5)
     const targetReps = parseReps(prescription.reps)
+    const timed = isTimedExercise(exercise)
+    const durationSec = timed ? parseDurationSec(prescription.reps) : undefined
     const sets: SetEntry[] = Array.from({ length: prescription.sets }, (_, setIndex) => {
       const repDrop = setIndex >= 2 && seed % 3 === 0 ? 1 : 0
+      const setDuration = durationSec ? durationSec + ((seed + setIndex * 5) % 4) * 15 : undefined
       return {
         id: `set_${sessionIndex}_${exerciseIndex}_${setIndex}`,
         weight: setIndex === prescription.sets - 1 && seed % 5 === 0 ? roundTo(weight * 0.95, 2.5) : weight,
-        reps: Math.max(3, targetReps - repDrop + (setIndex === 0 && seed % 4 === 0 ? 1 : 0)),
+        reps: timed ? 1 : Math.max(3, targetReps - repDrop + (setIndex === 0 && seed % 4 === 0 ? 1 : 0)),
         completed: true,
-        previous: { weight: roundTo(weight * 0.96, 2.5), reps: Math.max(3, targetReps - 1) },
+        durationSec: setDuration,
+        rpe: 7 + ((seed + setIndex) % 3),
+        previous: {
+          weight: roundTo(weight * 0.96, 2.5),
+          reps: timed ? 1 : Math.max(3, targetReps - 1),
+          durationSec: setDuration ? Math.max(1, setDuration - 15) : undefined,
+          rpe: 7 + ((seed + setIndex) % 2),
+        },
       }
     })
     builtExercises.push({ id: `we_${sessionIndex}_${exerciseIndex}`, exerciseId: exercise.id, sets, notes: '' })
@@ -118,14 +129,10 @@ const buildSession = (date: Date, routine: Routine, sessionIndex: number): Worko
     notes: exerciseIndexNote(sessionIndex),
     volume: 0,
     totalReps: 0,
+    activeSec: 0,
     prIds: [],
   }
-  session.volume = setVolume(session)
-  session.totalReps = session.exercises.reduce(
-    (sum, item) => sum + item.sets.filter((set) => set.completed).reduce((r, set) => r + set.reps, 0),
-    0,
-  )
-  return session
+  return recomputeSession(session, exercises, defaultProfile)
 }
 
 const exerciseIndexNote = (index: number) => {
@@ -172,17 +179,23 @@ export const createSeedState = (): AppState => {
     sessions.push(buildSession(doubleDate, templates[6], sessionIndex + 100))
   }
 
-  const prs = derivePRs(sessions)
+  const sorted = sessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const prData = rebuildPRs(sorted, exercises, defaultProfile)
+  const sessionsWithPRs = sorted.map((session) => ({
+    ...session,
+    prIds: prData.prIdsBySession[session.id] ?? [],
+  }))
   const state: AppState = {
     profile: defaultProfile,
     exercises,
     favorites: ['barbell-bench-press', 'lat-pulldown', 'barbell-back-squat', 'dumbbell-lateral-raise', 'hip-thrust'],
     routines,
-    sessions: sessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    prs,
+    sessions: sessionsWithPRs,
+    prs: prData.records,
     achievements: [],
     activeSessionId: null,
     streakFreezes: 2,
+    restTimer: null,
   }
   state.achievements = checkNewAchievements(state)
   return state
@@ -198,4 +211,5 @@ export const emptyState = (profile = defaultProfile): AppState => ({
   achievements: [],
   activeSessionId: null,
   streakFreezes: 0,
+  restTimer: null,
 })

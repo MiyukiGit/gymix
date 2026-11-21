@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { TabId } from './types'
 import { AppShell } from './components/layout/AppShell'
 import { PwaStatus } from './components/pwa/PwaStatus'
+import { RestTimerWatcher } from './components/RestTimerWatcher'
 import { ToastProvider } from './components/ui/Toast'
 import { HomeScreen } from './screens/HomeScreen'
 import { WorkoutScreen } from './screens/WorkoutScreen'
@@ -48,6 +49,7 @@ export default function App() {
   return (
     <ToastProvider>
       <PwaStatus />
+      <RestTimerWatcher />
       <AppShell tab={tab} onTabChange={navigate}>
         <AnimatePresence mode="wait">
           <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>

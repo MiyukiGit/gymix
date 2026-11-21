@@ -19,6 +19,7 @@ export const AnatomyFigure = ({
   onSelect,
   onHover,
   className,
+  colors: palette = colors,
 }: {
   view: AnatomyView
   levels: Partial<Record<MuscleId, number>>
@@ -26,6 +27,7 @@ export const AnatomyFigure = ({
   onSelect: (id: MuscleId) => void
   onHover?: (id: MuscleId | null) => void
   className?: string
+  colors?: readonly string[]
 }) => {
   const [hovered, setHovered] = useState<MuscleId | null>(null)
   const source = view === 'front' ? anteriorPaths : posteriorPaths
@@ -37,7 +39,7 @@ export const AnatomyFigure = ({
       <path
         key={`${view}-${id}`}
         d={d}
-        fill={colors[level]}
+        fill={palette[level] ?? palette[0]}
         opacity={level ? 1 : 0.6}
         stroke={active ? '#f3f4ef' : '#101410'}
         strokeWidth={active ? 5 : 2}

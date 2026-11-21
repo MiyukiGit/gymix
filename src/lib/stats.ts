@@ -1,10 +1,21 @@
 import { addDays, format, parseISO, subDays } from 'date-fns'
-import { exercises, muscleMap } from '../data/exercises'
+import { exercises as builtInExercises, muscleMap } from '../data/exercises'
 import type { Exercise, MuscleId, PersonalRecord, UserProfile, WorkoutSession } from '../types'
+import {
+  effectiveLoadKg,
+  effectiveVolumeKg,
+  getExerciseFromCatalog,
+  sessionActiveSec,
+  sessionReps,
+  sessionVolume,
+  setDurationSec,
+} from './metrics'
 import { getStreakInfo } from './streaks'
-import { dateKey, formatCompact, round } from './utils'
+import { dateKey, formatTimer, formatVolume, formatWeight, round } from './utils'
 
 export const completedSessions = (sessions: WorkoutSession[]) => sessions.filter((session) => session.status === 'completed')
+
+const byDateAsc = (a: WorkoutSession, b: WorkoutSession) => parseISO(a.date).getTime() - parseISO(b.date).getTime()
 
 export const getRangeSessions = (sessions: WorkoutSession[], days: number) => {
   if (days >= 3650) return completedSessions(sessions)
@@ -12,12 +23,12 @@ export const getRangeSessions = (sessions: WorkoutSession[], days: number) => {
   return completedSessions(sessions).filter((session) => parseISO(session.date).getTime() >= cutoff)
 }
 
-export const setVolume = (session: WorkoutSession) =>
-  session.exercises.reduce(
-    (total, exercise) =>
-      total + exercise.sets.filter((set) => set.completed).reduce((sum, set) => sum + set.weight * set.reps, 0),
-    0,
-  )
+/** Kept as a convenience wrapper; all volume is canonical kg-equivalents. */
+export const setVolume = (
+  session: WorkoutSession,
+  profile: UserProfile,
+  catalog: Exercise[] = builtInExercises,
+) => sessionVolume(session, catalog, profile)
 
 export const estimate1RM = (weight: number, reps: number) => (reps <= 1 ? weight : weight * (1 + reps / 30))
 
@@ -40,13 +51,15 @@ export interface Stats {
   uniqueExercises: number
 }
 
-export const getStats = (sessions: WorkoutSession[], profile: UserProfile, days = 3650): Stats => {
+export const getStats = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  days = 3650,
+  catalog: Exercise[] = builtInExercises,
+): Stats => {
   const scoped = getRangeSessions(sessions, days)
   const streak = getStreakInfo(sessions, profile)
-  const totalReps = scoped.reduce(
-    (sum, session) => sum + session.exercises.reduce((s, ex) => s + ex.sets.filter((set) => set.completed).reduce((r, set) => r + set.reps, 0), 0),
-    0,
-  )
+  const totalReps = scoped.reduce((sum, session) => sum + sessionReps(session, catalog), 0)
   const totalTime = scoped.reduce((sum, session) => sum + session.durationSec, 0)
   const uniqueExercises = new Set(scoped.flatMap((session) => session.exercises.map((item) => item.exerciseId)))
   const weekly = getRangeSessions(sessions, 7).length
@@ -54,7 +67,7 @@ export const getStats = (sessions: WorkoutSession[], profile: UserProfile, days 
 
   return {
     totalWorkouts: scoped.length,
-    totalVolume: scoped.reduce((sum, session) => sum + session.volume, 0),
+    totalVolume: scoped.reduce((sum, session) => sum + sessionVolume(session, catalog, profile), 0),
     totalReps,
     totalTime,
     avgDuration: scoped.length ? totalTime / scoped.length : 0,
@@ -72,7 +85,12 @@ export const getStats = (sessions: WorkoutSession[], profile: UserProfile, days 
   }
 }
 
-export const getWeeklyActivity = (sessions: WorkoutSession[], days = 7) => {
+export const getWeeklyActivity = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  catalog: Exercise[],
+  days = 7,
+) => {
   const completed = completedSessions(sessions)
   return Array.from({ length: days }, (_, index) => {
     const date = subDays(new Date(), days - 1 - index)
@@ -83,7 +101,7 @@ export const getWeeklyActivity = (sessions: WorkoutSession[], days = 7) => {
       label: format(date, days === 7 ? 'EEE' : 'MMM d'),
       fullLabel: format(date, 'EEEE, MMM d'),
       workouts: daySessions.length,
-      volume: daySessions.reduce((sum, session) => sum + session.volume, 0),
+      volume: daySessions.reduce((sum, session) => sum + sessionVolume(session, catalog, profile), 0),
       duration: daySessions.reduce((sum, session) => sum + session.durationSec, 0),
       active: daySessions.length > 0,
     }
@@ -92,11 +110,16 @@ export const getWeeklyActivity = (sessions: WorkoutSession[], days = 7) => {
 
 const bucketDate = (date: Date, days: number) => {
   if (days <= 14) return format(date, 'MMM d')
-  if (days <= 120) return `W${format(date, 'w')}`
+  if (days <= 120) return `W${format(date, 'yyyy')}-${format(date, 'w')}`
   return format(date, 'MMM yy')
 }
 
-export const getTrend = (sessions: WorkoutSession[], days: number) => {
+export const getTrend = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  catalog: Exercise[],
+  days: number,
+) => {
   const scoped = getRangeSessions(sessions, days)
   const buckets = new Map<string, { label: string; volume: number; workouts: number; reps: number; date: number }>()
 
@@ -107,7 +130,8 @@ export const getTrend = (sessions: WorkoutSession[], days: number) => {
     })
   } else {
     const start = subDays(new Date(), days)
-    const cursor = start <= parseISO(scoped[0]?.date ?? new Date().toISOString()) ? start : parseISO(scoped[0].date)
+    const first = scoped.length ? parseISO([...scoped].sort(byDateAsc)[0].date) : new Date()
+    const cursor = first < start ? start : first
     let pointer = cursor
     while (pointer <= new Date()) {
       const label = bucketDate(pointer, days)
@@ -119,9 +143,9 @@ export const getTrend = (sessions: WorkoutSession[], days: number) => {
   scoped.forEach((session) => {
     const label = bucketDate(parseISO(session.date), days)
     const bucket = buckets.get(label) ?? { label, volume: 0, workouts: 0, reps: 0, date: parseISO(session.date).getTime() }
-    bucket.volume += session.volume
+    bucket.volume += sessionVolume(session, catalog, profile)
     bucket.workouts += 1
-    bucket.reps += session.totalReps
+    bucket.reps += sessionReps(session, catalog)
     buckets.set(label, bucket)
   })
 
@@ -139,7 +163,12 @@ export interface MuscleAggregate {
   level: number
 }
 
-export const getMuscleAggregates = (sessions: WorkoutSession[], days = 90): MuscleAggregate[] => {
+export const getMuscleAggregates = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  catalog: Exercise[],
+  days = 90,
+): MuscleAggregate[] => {
   const scoped = getRangeSessions(sessions, days)
   const result = new Map<MuscleId, MuscleAggregate>()
 
@@ -159,19 +188,24 @@ export const getMuscleAggregates = (sessions: WorkoutSession[], days = 90): Musc
   scoped.forEach((session) => {
     const touched = new Set<MuscleId>()
     session.exercises.forEach((item) => {
-      const exercise = exercises.find((candidate) => candidate.id === item.exerciseId)
+      const exercise = getExerciseFromCatalog(item.exerciseId, catalog)
       if (!exercise) return
-      const volume = item.sets.filter((set) => set.completed).reduce((sum, set) => sum + set.weight * set.reps, 0)
+      const volume = item.sets.reduce(
+        (sum, set) => sum + effectiveVolumeKg(set, exercise, profile),
+        0,
+      )
       if (!volume) return
       exercise.primary.forEach((muscle) => {
-        const entry = result.get(muscle)!
+        const entry = result.get(muscle)
+        if (!entry) return
         entry.volume += volume
         entry.exercises.add(exercise.id)
         entry.primarySessions += 1
         touched.add(muscle)
       })
       exercise.secondary.forEach((muscle) => {
-        const entry = result.get(muscle)!
+        const entry = result.get(muscle)
+        if (!entry) return
         entry.volume += volume * 0.35
         entry.exercises.add(exercise.id)
         touched.add(muscle)
@@ -193,31 +227,36 @@ export const getMuscleAggregates = (sessions: WorkoutSession[], days = 90): Musc
   return Array.from(result.values()).sort((a, b) => b.volume - a.volume)
 }
 
-export const getMuscleDetail = (sessions: WorkoutSession[], muscleId: MuscleId, days = 90) => {
-  const aggregates = getMuscleAggregates(sessions, days)
+export const getMuscleDetail = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  catalog: Exercise[],
+  muscleId: MuscleId,
+  days = 90,
+) => {
+  const aggregates = getMuscleAggregates(sessions, profile, catalog, days)
   const aggregate = aggregates.find((item) => item.muscle === muscleId) ?? aggregates[0]
+  const involvesMuscle = (exerciseId: string) => {
+    const exercise = getExerciseFromCatalog(exerciseId, catalog)
+    return Boolean(exercise && (exercise.primary.includes(muscleId) || exercise.secondary.includes(muscleId)))
+  }
   const history = completedSessions(sessions)
-    .filter((session) =>
-      session.exercises.some((item) => {
-        const exercise = exercises.find((candidate) => candidate.id === item.exerciseId)
-        return exercise ? exercise.primary.includes(muscleId) || exercise.secondary.includes(muscleId) : false
-      }),
-    )
+    .filter((session) => session.exercises.some((item) => involvesMuscle(item.exerciseId)))
     .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
     .slice(0, 8)
     .map((session) => {
-      const relevantExercises = session.exercises.filter((item) => {
-        const exercise = exercises.find((candidate) => candidate.id === item.exerciseId)
-        return exercise ? exercise.primary.includes(muscleId) || exercise.secondary.includes(muscleId) : false
-      })
+      const relevantExercises = session.exercises.filter((item) => involvesMuscle(item.exerciseId))
       const volume = relevantExercises.reduce(
-        (sum, item) => sum + item.sets.filter((set) => set.completed).reduce((s, set) => s + set.weight * set.reps, 0),
+        (sum, item) => {
+          const exercise = getExerciseFromCatalog(item.exerciseId, catalog)
+          return sum + item.sets.reduce((s, set) => s + effectiveVolumeKg(set, exercise, profile), 0)
+        },
         0,
       )
       return { id: session.id, name: session.name, date: session.date, durationSec: session.durationSec, volume, exercises: relevantExercises.length }
     })
 
-  const allExercises = exercises.filter((exercise) => exercise.primary.includes(muscleId) || exercise.secondary.includes(muscleId))
+  const allExercises = catalog.filter((exercise) => exercise.primary.includes(muscleId) || exercise.secondary.includes(muscleId))
   return {
     ...aggregate,
     description: muscleMap[muscleId].description,
@@ -236,80 +275,220 @@ export interface ExercisePoint {
   volume: number
   reps: number
   sets: number
+  durationSec: number
 }
 
-export const getExerciseProgression = (sessions: WorkoutSession[], exerciseId: string): ExercisePoint[] =>
-  completedSessions(sessions)
+export const getExerciseProgression = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  catalog: Exercise[],
+  exerciseId: string,
+): ExercisePoint[] => {
+  const exercise = getExerciseFromCatalog(exerciseId, catalog)
+  return completedSessions(sessions)
     .map((session) => {
       const item = session.exercises.find((entry) => entry.exerciseId === exerciseId)
       if (!item) return null
       const sets = item.sets.filter((set) => set.completed)
       if (!sets.length) return null
-      const best = sets.reduce((winner, set) => (estimate1RM(set.weight, set.reps) > estimate1RM(winner.weight, winner.reps) ? set : winner))
+      const best = sets.reduce((winner, set) =>
+        effectiveLoadKg(set, exercise, profile) > effectiveLoadKg(winner, exercise, profile) ? set : winner,
+      )
       return {
         date: session.date,
-        weight: best.weight,
-        e1rm: round(estimate1RM(best.weight, best.reps), 1),
-        volume: sets.reduce((sum, set) => sum + set.weight * set.reps, 0),
+        weight: round(effectiveLoadKg(best, exercise, profile), 1),
+        e1rm: round(estimate1RM(effectiveLoadKg(best, exercise, profile), best.reps), 1),
+        volume: round(sets.reduce((sum, set) => sum + effectiveVolumeKg(set, exercise, profile), 0), 1),
         reps: sets.reduce((sum, set) => sum + set.reps, 0),
         sets: sets.length,
+        durationSec: sets.reduce((sum, set) => sum + setDurationSec(set, exercise), 0),
       }
     })
     .filter((point): point is ExercisePoint => point !== null)
     .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+}
 
-export const derivePRs = (sessions: WorkoutSession[], existing: PersonalRecord[] = []): PersonalRecord[] => {
-  const byExercise = new Map<string, PersonalRecord>()
-  const push = (record: PersonalRecord) => {
-    const current = byExercise.get(record.id)
-    if (!current || record.value > current.value) byExercise.set(record.id, record)
-  }
+type PRCandidate = Omit<PersonalRecord, 'date' | 'sessionId'>
 
-  completedSessions(sessions).forEach((session) => {
-    session.exercises.forEach((item) => {
-      const sets = item.sets.filter((set) => set.completed)
-      if (!sets.length) return
-      const heaviest = sets.reduce((winner, set) => (set.weight > winner.weight ? set : winner))
-      const topE1rm = sets.reduce((winner, set) =>
-        estimate1RM(set.weight, set.reps) > estimate1RM(winner.weight, winner.reps) ? set : winner,
-      )
-      const mostReps = sets.reduce((winner, set) => (set.reps > winner.reps ? set : winner))
-      const volume = sets.reduce((sum, set) => sum + set.weight * set.reps, 0)
-      const base = { exerciseId: item.exerciseId, date: session.date, sessionId: session.id }
-      push({ ...base, id: `weight_${item.exerciseId}`, type: 'weight', value: heaviest.weight, reps: heaviest.reps })
-      push({ ...base, id: `e1rm_${item.exerciseId}`, type: 'e1rm', value: round(estimate1RM(topE1rm.weight, topE1rm.reps), 1), reps: topE1rm.reps })
-      if (mostReps.reps > 0) push({ ...base, id: `reps_${item.exerciseId}`, type: 'reps', value: mostReps.reps, reps: mostReps.reps })
-      push({ ...base, id: `volume_${item.exerciseId}`, type: 'volume', value: round(volume, 0) })
-    })
+export interface PRDerivation {
+  records: PersonalRecord[]
+  /** PR ids first set or improved in each session. */
+  prIdsBySession: Record<string, string[]>
+}
+
+const PR_EPSILON = 0.0001
+
+const collectPRCandidates = (
+  session: WorkoutSession,
+  profile: UserProfile,
+  catalog: Exercise[],
+): PRCandidate[] => {
+  const candidates: PRCandidate[] = []
+  session.exercises.forEach((item) => {
+    const exercise = getExerciseFromCatalog(item.exerciseId, catalog)
+    if (!exercise) return
+    const sets = item.sets.filter((set) => set.completed)
+    if (!sets.length) return
+
+    const volume = round(
+      sets.reduce((sum, set) => sum + effectiveVolumeKg(set, exercise, profile), 0),
+      1,
+    )
+    if (volume > 0) candidates.push({ id: `volume_${item.exerciseId}`, exerciseId: item.exerciseId, type: 'volume', value: volume })
+
+    const timedSets = sets.filter((set) => setDurationSec(set, exercise) > 0)
+    if (timedSets.length) {
+      const longest = timedSets.reduce((winner, set) => (setDurationSec(set, exercise) > setDurationSec(winner, exercise) ? set : winner))
+      candidates.push({
+        id: `time_${item.exerciseId}`,
+        exerciseId: item.exerciseId,
+        type: 'time',
+        value: round(setDurationSec(longest, exercise), 0),
+      })
+      return
+    }
+
+    const heaviest = sets.reduce((winner, set) =>
+      effectiveLoadKg(set, exercise, profile) > effectiveLoadKg(winner, exercise, profile) ? set : winner,
+    )
+    const topE1rm = sets.reduce((winner, set) =>
+      estimate1RM(effectiveLoadKg(set, exercise, profile), set.reps) >
+      estimate1RM(effectiveLoadKg(winner, exercise, profile), winner.reps)
+        ? set
+        : winner,
+    )
+    const mostReps = sets.reduce((winner, set) => (set.reps > winner.reps ? set : winner))
+    const heaviestLoad = round(effectiveLoadKg(heaviest, exercise, profile), 1)
+
+    if (heaviestLoad > 0) {
+      candidates.push({
+        id: `weight_${item.exerciseId}`,
+        exerciseId: item.exerciseId,
+        type: 'weight',
+        value: heaviestLoad,
+        reps: heaviest.reps,
+      })
+      candidates.push({
+        id: `e1rm_${item.exerciseId}`,
+        exerciseId: item.exerciseId,
+        type: 'e1rm',
+        value: round(estimate1RM(effectiveLoadKg(topE1rm, exercise, profile), topE1rm.reps), 1),
+        reps: topE1rm.reps,
+      })
+    }
+    if (mostReps.reps > 0) {
+      candidates.push({
+        id: `reps_${item.exerciseId}`,
+        exerciseId: item.exerciseId,
+        type: 'reps',
+        value: mostReps.reps,
+        reps: mostReps.reps,
+      })
+    }
+  })
+  return candidates
+}
+
+/**
+ * Rebuilds the current best record for every exercise/metric. A record is only
+ * attributed to a session when it establishes or strictly beats the prior best.
+ */
+export const derivePRData = (
+  sessions: WorkoutSession[],
+  options: { existing?: PersonalRecord[]; catalog?: Exercise[]; profile?: UserProfile } = {},
+): PRDerivation => {
+  const profile = options.profile ?? ({ weightKg: 75, unit: 'kg' } as UserProfile)
+  const catalog = options.catalog ?? builtInExercises
+  const best = new Map<string, { value: number; record: PersonalRecord }>()
+  const prIdsBySession: Record<string, string[]> = {}
+
+  ;(options.existing ?? []).forEach((record) => {
+    if (!Number.isFinite(record.value) || record.value <= 0) return
+    const current = best.get(record.id)
+    if (!current || record.value > current.value) best.set(record.id, { value: record.value, record })
   })
 
-  existing.forEach((record) => push(record))
-  return Array.from(byExercise.values())
+  completedSessions(sessions)
+    .slice()
+    .sort(byDateAsc)
+    .forEach((session) => {
+      collectPRCandidates(session, profile, catalog).forEach((candidate) => {
+        const current = best.get(candidate.id)
+        if (current && candidate.value <= current.value + PR_EPSILON) return
+        const record: PersonalRecord = {
+          ...candidate,
+          date: session.date,
+          sessionId: session.id,
+        }
+        best.set(candidate.id, { value: candidate.value, record })
+        prIdsBySession[session.id] = [...(prIdsBySession[session.id] ?? []), candidate.id]
+      })
+    })
+
+  return { records: Array.from(best.values()).map((entry) => entry.record), prIdsBySession }
 }
 
-export const getPRList = (sessions: WorkoutSession[], unit: UserProfile['unit'] = 'kg') => {
-  const exerciseLookup = new Map<string, Exercise>(exercises.map((exercise) => [exercise.id, exercise]))
-  return derivePRs(sessions)
-    .filter((record) => record.type !== 'volume' || record.value > 0)
+export const derivePRs = (
+  sessions: WorkoutSession[],
+  existing: PersonalRecord[] = [],
+  catalog: Exercise[] = builtInExercises,
+  profile?: UserProfile,
+) => derivePRData(sessions, { existing, catalog, profile }).records
+
+/** Full recompute used after a session is edited or deleted. */
+export const rebuildPRs = (
+  sessions: WorkoutSession[],
+  catalog: Exercise[] = builtInExercises,
+  profile?: UserProfile,
+) => derivePRData(sessions, { catalog, profile })
+
+const typeLabels: Record<PersonalRecord['type'], string> = {
+  weight: 'Heaviest set',
+  e1rm: 'Estimated 1RM',
+  reps: 'Most reps',
+  volume: 'Session volume',
+  time: 'Longest hold',
+}
+
+export const getPRList = (
+  records: PersonalRecord[],
+  catalog: Exercise[] = builtInExercises,
+  unit: UserProfile['unit'] = 'kg',
+) =>
+  records
+    .filter((record) => Number.isFinite(record.value) && record.value > 0)
     .map((record) => ({
       ...record,
-      exerciseName: exerciseLookup.get(record.exerciseId)?.name ?? 'Custom exercise',
+      exerciseName: getExerciseFromCatalog(record.exerciseId, catalog)?.name ?? 'Custom exercise',
+      typeLabel: typeLabels[record.type],
       displayValue:
-        record.type === 'reps' ? `${record.value} reps` : record.type === 'volume' ? `${formatCompact(record.value)} kg` : `${round(record.type === 'e1rm' ? record.value : record.value, 1)} ${unit}`,
+        record.type === 'reps'
+          ? `${record.value} reps`
+          : record.type === 'time'
+            ? formatTimer(record.value)
+            : record.type === 'volume'
+              ? formatVolume(record.value, unit)
+              : formatWeight(record.value, unit, 1),
     }))
     .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
-}
 
-export const getVolumesByCategory = (sessions: WorkoutSession[], days = 90) => {
+export const getVolumesByCategory = (
+  sessions: WorkoutSession[],
+  profile: UserProfile,
+  catalog: Exercise[],
+  days = 90,
+) => {
   const scoped = getRangeSessions(sessions, days)
   const map = new Map<string, number>()
   scoped.forEach((session) =>
     session.exercises.forEach((item) => {
-      const exercise = exercises.find((candidate) => candidate.id === item.exerciseId)
+      const exercise = getExerciseFromCatalog(item.exerciseId, catalog)
       if (!exercise) return
-      const volume = item.sets.filter((set) => set.completed).reduce((sum, set) => sum + set.weight * set.reps, 0)
+      const volume = item.sets.reduce((sum, set) => sum + effectiveVolumeKg(set, exercise, profile), 0)
       map.set(exercise.category, (map.get(exercise.category) ?? 0) + volume)
     }),
   )
   return Array.from(map, ([name, volume]) => ({ name, volume })).sort((a, b) => b.volume - a.volume)
 }
+
+export { sessionActiveSec }

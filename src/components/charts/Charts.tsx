@@ -17,7 +17,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { WeightUnit } from '../../types'
-import { formatCompact } from '../../lib/utils'
+import { formatCompact, formatVolume, formatWeight, toDisplayWeight } from '../../lib/utils'
 
 interface TooltipProps {
   active?: boolean
@@ -60,8 +60,8 @@ export const VolumeAreaChart = ({ data, unit = 'kg' }: { data: { label: string; 
         </defs>
         <CartesianGrid vertical={false} stroke="#30352e" strokeDasharray="3 6" opacity={0.55} />
         <XAxis dataKey="label" {...axisProps} tickMargin={10} />
-        <YAxis {...axisProps} tickFormatter={(value) => formatCompact(Number(value))} width={48} />
-        <Tooltip content={<ChartTooltip formatter={(value) => `${formatCompact(value)} ${unit}`} />} {...tooltipStyle} />
+        <YAxis {...axisProps} tickFormatter={(value) => formatCompact(toDisplayWeight(Number(value), unit))} width={48} />
+        <Tooltip content={<ChartTooltip formatter={(value) => formatVolume(value, unit)} />} {...tooltipStyle} />
         <Area type="monotone" dataKey="volume" name="Volume" stroke="#c6f36a" strokeWidth={2.5} fill="url(#volumeFill)" activeDot={{ r: 5, fill: '#c6f36a', stroke: '#101110', strokeWidth: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
@@ -86,7 +86,7 @@ export const WeeklyBars = ({ data }: { data: { label: string; workouts: number; 
   </div>
 )
 
-export const MuscleRadar = ({ data }: { data: { name: string; volume: number }[] }) => {
+export const MuscleRadar = ({ data, unit = 'kg' }: { data: { name: string; volume: number }[]; unit?: WeightUnit }) => {
   const trimmed = data.slice(0, 8)
   if (!trimmed.length) return null
   return (
@@ -95,7 +95,7 @@ export const MuscleRadar = ({ data }: { data: { name: string; volume: number }[]
         <RadarChart data={trimmed} outerRadius="72%">
           <PolarGrid stroke="#30352e" />
           <PolarAngleAxis dataKey="name" tick={{ fill: '#92978f', fontSize: 10 }} />
-          <Tooltip content={<ChartTooltip formatter={(value) => formatCompact(value)} />} />
+          <Tooltip content={<ChartTooltip formatter={(value) => formatVolume(value, unit)} />} />
           <Radar name="Volume" dataKey="volume" stroke="#c6f36a" strokeWidth={2} fill="#c6f36a" fillOpacity={0.28} />
         </RadarChart>
       </ResponsiveContainer>
@@ -103,7 +103,7 @@ export const MuscleRadar = ({ data }: { data: { name: string; volume: number }[]
   )
 }
 
-export const MuscleDonut = ({ data }: { data: { name: string; volume: number }[] }) => {
+export const MuscleDonut = ({ data, unit = 'kg' }: { data: { name: string; volume: number }[]; unit?: WeightUnit }) => {
   const colors = ['#c6f36a', '#8edb78', '#f4b860', '#6fa8dc', '#a9d94f', '#92978f', '#d9a5f3', '#7fc9b5']
   if (!data.length) return null
   return (
@@ -115,7 +115,7 @@ export const MuscleDonut = ({ data }: { data: { name: string; volume: number }[]
               <Cell key={entry.name} fill={colors[index % colors.length]} />
             ))}
           </Pie>
-          <Tooltip content={<ChartTooltip formatter={(value) => formatCompact(value)} />} />
+          <Tooltip content={<ChartTooltip formatter={(value) => formatVolume(value, unit)} />} />
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
@@ -140,6 +140,8 @@ export const ProgressionChart = ({
     label: new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
   }))
   const color = metric === 'volume' ? '#f4b860' : '#c6f36a'
+  const formatValue = (value: number) =>
+    metric === 'volume' ? formatVolume(value, unit) : formatWeight(value, unit, 1)
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -152,8 +154,8 @@ export const ProgressionChart = ({
           </defs>
           <CartesianGrid vertical={false} stroke="#30352e" strokeDasharray="3 6" opacity={0.5} />
           <XAxis dataKey="label" {...axisProps} tickMargin={10} minTickGap={24} />
-          <YAxis {...axisProps} width={50} tickFormatter={(value) => formatCompact(Number(value))} />
-          <Tooltip content={<ChartTooltip formatter={(value) => metric === 'volume' ? `${formatCompact(value)} ${unit}` : `${value} ${unit}`} />} />
+          <YAxis {...axisProps} width={50} tickFormatter={(value) => formatCompact(toDisplayWeight(Number(value), unit))} />
+          <Tooltip content={<ChartTooltip formatter={formatValue} />} />
           <Area
             type="monotone"
             dataKey={metric}
