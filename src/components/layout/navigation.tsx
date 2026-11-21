@@ -79,7 +79,7 @@ export const NavigationDrawer = ({
 }) => (
   <AnimatePresence>
     {open && (
-      <div className="fixed inset-0 z-[130]" role="dialog" aria-modal="true" aria-label="GYMIX navigation">
+      <div className="fixed inset-0 z-[130] md:hidden" role="dialog" aria-modal="true" aria-label="GYMIX navigation">
         <motion.div
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           initial={{ opacity: 0 }}
@@ -93,8 +93,8 @@ export const NavigationDrawer = ({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '-104%', opacity: 0.98 }}
           transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="relative flex h-full min-h-dvh w-[min(80vw,320px)] max-w-[calc(100vw-3.5rem)] flex-col border-r border-border bg-surface shadow-[24px_0_70px_-24px_rgba(0,0,0,0.95)]"
-          style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingLeft: 'calc(1rem + env(safe-area-inset-left))' }}
+          className="relative flex h-full min-h-dvh w-[min(80vw,320px)] max-w-[calc(100vw-3.5rem)] flex-col border-r border-border bg-surface pt-16 shadow-[24px_0_70px_-24px_rgba(0,0,0,0.95)]"
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingLeft: 'calc(1rem + env(safe-area-inset-left))' }}
         >
           <div className="flex items-start justify-between gap-4 pr-4">
             <div className="flex items-center gap-3">

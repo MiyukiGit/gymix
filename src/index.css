@@ -38,7 +38,6 @@
 html,
 body,
 #root {
-  min-height: 100vh;
   min-height: 100dvh;
 }
 
@@ -57,14 +56,15 @@ body {
   background-attachment: fixed;
 }
 
-/* iOS standalone / safe-area layout */
+/* iOS standalone: the top inset is applied only here. */
 .app-header {
-  top: env(safe-area-inset-top);
-  padding-top: calc(0.75rem + env(safe-area-inset-top));
+  position: sticky;
+  top: 0;
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  background-color: var(--color-bg);
 }
 
 .app-modal {
-  max-height: 92vh;
   max-height: calc(92dvh - env(safe-area-inset-bottom));
 }
 

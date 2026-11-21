@@ -36,13 +36,13 @@ export const AppShell = ({
   useEffect(() => setMenuOpen(false), [tab])
 
   return (
-    <div className="min-h-screen">
-      <header className="app-header sticky top-0 z-40 border-b border-border/60 bg-bg/80 backdrop-blur-xl">
+    <div className="min-h-dvh">
+      <header className="app-header sticky top-0 z-40 border-b border-border/60 bg-bg backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-[#11140f] shadow-[0_0_28px_-8px_rgba(198,243,106,0.9)] transition hover:scale-105 active:scale-95"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-[#11140f] shadow-[0_0_28px_-8px_rgba(198,243,106,0.9)] transition hover:scale-105 active:scale-95 md:hidden"
               aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={menuOpen}
               aria-controls="mobile-navigation"

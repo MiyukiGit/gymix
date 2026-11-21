@@ -103,10 +103,10 @@ export const PwaStatus = () => {
       <AnimatePresence>
         {offline && !needRefresh && (
           <motion.div
-            initial={{ opacity: 0, y: -12 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            className="pointer-events-none fixed inset-x-0 top-[calc(4.5rem+env(safe-area-inset-top))] z-[180] flex justify-center px-4"
+            exit={{ opacity: 0, y: 12 }}
+            className="pointer-events-none fixed inset-x-0 bottom-[calc(9rem+env(safe-area-inset-bottom))] z-[180] flex justify-center px-4 sm:bottom-[calc(10.5rem+env(safe-area-inset-bottom))]"
           >
             <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-warning/30 bg-[#2a2418]/95 px-4 py-2 text-xs font-semibold text-warning shadow-2xl backdrop-blur-xl" role="status">
               <CloudOff size={14} className="shrink-0" />
