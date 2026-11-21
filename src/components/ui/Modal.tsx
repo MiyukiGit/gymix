@@ -42,7 +42,7 @@ export const Modal = ({ open, onClose, title, subtitle, children, size = 'md', f
             role="dialog"
             aria-modal="true"
             className={cn(
-              'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-border bg-surface shadow-2xl sm:rounded-3xl',
+              'app-modal relative z-10 flex w-full flex-col overflow-hidden rounded-t-3xl border border-border bg-surface shadow-2xl sm:rounded-3xl',
               widths[size],
             )}
             initial={{ opacity: 0, y: 40, scale: 0.98 }}
@@ -62,7 +62,7 @@ export const Modal = ({ open, onClose, title, subtitle, children, size = 'md', f
               </div>
             )}
             <div className="no-scrollbar overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
-            {footer && <div className="border-t border-border/70 bg-card/40 px-5 py-4 sm:px-6">{footer}</div>}
+            {footer && <div className="app-modal-footer border-t border-border/70 bg-card/40 px-5 py-4 sm:px-6">{footer}</div>}
           </motion.div>
         </div>
       )}

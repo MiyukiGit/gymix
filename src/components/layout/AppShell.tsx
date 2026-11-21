@@ -38,7 +38,7 @@ export const AppShell = ({
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-bg/80 backdrop-blur-xl">
+      <header className="app-header sticky top-0 z-40 border-b border-border/60 bg-bg/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <button className="flex items-center gap-3 text-left" onClick={() => onTabChange('home')}>
             <BrandMark />
@@ -68,9 +68,9 @@ export const AppShell = ({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-8 pr-20 pt-5 sm:px-6 sm:pb-40">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pr-[calc(5rem+env(safe-area-inset-right))] pt-5 sm:px-6 sm:pb-[calc(10rem+env(safe-area-inset-bottom))] sm:pr-6">{children}</main>
 
-      <nav className="fixed right-2 top-1/2 z-50 -translate-y-1/2 rounded-2xl border border-border bg-surface/90 p-2 shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-4 sm:left-1/2 sm:right-auto sm:top-auto sm:w-auto sm:max-w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:translate-y-0 sm:px-3 sm:py-2">
+      <nav className="app-dock fixed right-2 top-1/2 z-50 -translate-y-1/2 rounded-2xl border border-border bg-surface/90 p-2 shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:left-1/2 sm:top-auto sm:w-auto sm:max-w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:translate-y-0 sm:px-3 sm:py-2">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-1">
           {tabs.map((item) => {
             const Icon = item.icon

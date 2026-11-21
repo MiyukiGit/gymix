@@ -38,16 +38,59 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   background:
     radial-gradient(1000px 600px at 85% -10%, rgba(198, 243, 106, 0.07), transparent 60%),
     radial-gradient(800px 500px at -10% 20%, rgba(142, 219, 120, 0.04), transparent 55%),
     var(--color-bg);
   background-attachment: fixed;
+}
+
+/* iOS standalone / safe-area layout */
+.app-header {
+  top: env(safe-area-inset-top);
+  padding-top: calc(0.75rem + env(safe-area-inset-top));
+}
+
+.app-dock {
+  right: calc(0.5rem + env(safe-area-inset-right));
+}
+
+@media (min-width: 640px) {
+  .app-dock {
+    right: auto;
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
+
+.app-modal {
+  max-height: 92vh;
+  max-height: calc(92dvh - env(safe-area-inset-bottom));
+}
+
+.app-modal-footer {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 639px) {
+  /* Prevent iOS from zooming form fields on focus. */
+  input,
+  textarea,
+  select,
+  .field {
+    font-size: 16px;
+  }
 }
 
 button,
