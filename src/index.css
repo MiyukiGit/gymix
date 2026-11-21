@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #101110;
+  --color-surface: #191b19;
+  --color-card: #202320;
+  --color-card-2: #262a26;
+  --color-accent: #c6f36a;
+  --color-accent-soft: #a9d94f;
+  --color-text: #f3f4ef;
+  --color-muted: #92978f;
+  --color-border: #30352e;
+  --color-success: #8edb78;
+  --color-warning: #f4b860;
+  --color-danger: #f08080;
+
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+}
+
+:root {
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1000px 600px at 85% -10%, rgba(198, 243, 106, 0.07), transparent 60%),
+    radial-gradient(800px 500px at -10% 20%, rgba(142, 219, 120, 0.04), transparent 55%),
+    var(--color-bg);
+  background-attachment: fixed;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+::selection {
+  background: rgba(198, 243, 106, 0.28);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #343a33;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #454c44;
+}
+
+@utility text-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.035em;
+}
+
+@utility glass-card {
+  background: linear-gradient(145deg, rgba(38, 42, 38, 0.92), rgba(28, 31, 28, 0.92));
+  border: 1px solid var(--color-border);
+  box-shadow: 0 18px 48px -32px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+@utility accent-glow {
+  box-shadow: 0 0 0 1px rgba(198, 243, 106, 0.28), 0 12px 36px -14px rgba(198, 243, 106, 0.38);
+}
+
+@utility soft-glow {
+  box-shadow: 0 12px 40px -24px rgba(198, 243, 106, 0.45);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-xl border border-border bg-bg/70 px-3.5 py-2.5 text-sm text-text outline-none transition placeholder:text-muted/70 focus:border-accent/60 focus:ring-2 focus:ring-accent/10;
+  }
+
+  .label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted;
+  }
+
+  .divider {
+    @apply h-px w-full bg-border/80;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #262a26;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.recharts-cartesian-axis-tick-value {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  fill: #92978f;
+}
+
+.recharts-default-tooltip {
+  border-radius: 14px !important;
+  border: 1px solid #30352e !important;
+  background: #191b19 !important;
+  box-shadow: 0 18px 48px -28px #000 !important;
+}
